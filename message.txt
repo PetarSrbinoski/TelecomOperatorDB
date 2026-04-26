@@ -1,0 +1,653 @@
+CREATE TABLE customers
+(
+    customer_id   SERIAL                                NOT NULL,
+    customer_type VARCHAR(20)                           NOT NULL,
+    first_name    VARCHAR(100),
+    last_name     VARCHAR(100),
+    company_name  VARCHAR(200),
+    email         VARCHAR(255) UNIQUE,
+    phone         VARCHAR(30),
+    date_of_birth DATE,
+    status        VARCHAR(20) DEFAULT 'active'          NOT NULL,
+    created_at    TIMESTAMP   DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    updated_at    TIMESTAMP   DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    PRIMARY KEY (customer_id),
+    CONSTRAINT chk_customers_type_value CHECK (customer_type IN ('individual', 'business')),
+    CONSTRAINT chk_customers_type_fields CHECK (
+        (customer_type = 'individual' AND first_name IS NOT NULL AND last_name IS NOT NULL)
+        OR
+        (customer_type = 'business' AND company_name IS NOT NULL)
+    )
+);
+
+CREATE TABLE customer_addresses
+(
+    address_id   SERIAL                              NOT NULL,
+    customer_id  INT                                 NOT NULL,
+    address_type VARCHAR(20)                         NOT NULL,
+    country      VARCHAR(100)                        NOT NULL,
+    city         VARCHAR(100)                        NOT NULL,
+    street       VARCHAR(255)                        NOT NULL,
+    postal_code  VARCHAR(20),
+    latitude     NUMERIC(9, 6),
+    longitude    NUMERIC(9, 6),
+    is_primary   BOOLEAN   DEFAULT FALSE             NOT NULL,
+    created_at   TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    PRIMARY KEY (address_id),
+    CONSTRAINT chk_customer_addresses_type CHECK (address_type IN ('billing', 'service', 'home', 'office', 'other')),
+    CONSTRAINT fk_customer_addresses_customer FOREIGN KEY (customer_id) REFERENCES customers (customer_id)
+);
+
+CREATE TABLE billing_cycles
+(
+    billing_cycle_id SERIAL                              NOT NULL,
+    cycle_name       VARCHAR(50)                         NOT NULL UNIQUE,
+    day_of_month     INT                                 NOT NULL,
+    grace_days       INT       DEFAULT 0                 NOT NULL,
+    is_active        BOOLEAN   DEFAULT TRUE              NOT NULL,
+    created_at       TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    PRIMARY KEY (billing_cycle_id),
+    CONSTRAINT chk_billing_cycles_day CHECK (day_of_month BETWEEN 1 AND 31),
+    CONSTRAINT chk_billing_cycles_grace CHECK (grace_days >= 0)
+);
+
+CREATE TABLE accounts
+(
+    account_id       SERIAL                                   NOT NULL,
+    customer_id      INT                                      NOT NULL,
+    account_number   VARCHAR(50)                              NOT NULL UNIQUE,
+    account_status   VARCHAR(20)    DEFAULT 'active'          NOT NULL,
+    credit_limit     NUMERIC(12, 2) DEFAULT 0.00              NOT NULL,
+    current_balance  NUMERIC(12, 2) DEFAULT 0.00              NOT NULL,
+    billing_cycle_id INT,
+    created_at       TIMESTAMP      DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    updated_at       TIMESTAMP      DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    PRIMARY KEY (account_id),
+    CONSTRAINT fk_accounts_customer FOREIGN KEY (customer_id) REFERENCES customers (customer_id),
+    CONSTRAINT fk_accounts_billing_cycle FOREIGN KEY (billing_cycle_id) REFERENCES billing_cycles (billing_cycle_id)
+);
+
+CREATE TABLE contracts
+(
+    contract_id     SERIAL                       NOT NULL,
+    customer_id     INT                          NOT NULL,
+    account_id      INT                          NOT NULL,
+    contract_type   VARCHAR(30)                  NOT NULL,
+    contract_number VARCHAR(50)                  NOT NULL UNIQUE,
+    start_date      DATE                         NOT NULL,
+    end_date        DATE,
+    auto_renew      BOOLEAN     DEFAULT FALSE    NOT NULL,
+    status          VARCHAR(20) DEFAULT 'active' NOT NULL,
+    signed_at       TIMESTAMP,
+    PRIMARY KEY (contract_id),
+    CONSTRAINT chk_contracts_dates CHECK (end_date IS NULL OR end_date >= start_date),
+    CONSTRAINT fk_contracts_customer FOREIGN KEY (customer_id) REFERENCES customers (customer_id),
+    CONSTRAINT fk_contracts_account FOREIGN KEY (account_id) REFERENCES accounts (account_id)
+);
+
+CREATE TABLE departments
+(
+    department_id   SERIAL                       NOT NULL,
+    department_name VARCHAR(100)                 NOT NULL UNIQUE,
+    location        VARCHAR(150),
+    status          VARCHAR(20) DEFAULT 'active' NOT NULL,
+    PRIMARY KEY (department_id)
+);
+
+CREATE TABLE employee_roles
+(
+    role_id          SERIAL               NOT NULL,
+    role_name        VARCHAR(100)         NOT NULL UNIQUE,
+    role_description TEXT,
+    access_level     INT     DEFAULT 1    NOT NULL,
+    is_active        BOOLEAN DEFAULT TRUE NOT NULL,
+    PRIMARY KEY (role_id),
+    CONSTRAINT chk_employee_roles_access CHECK (access_level >= 1)
+);
+
+CREATE TABLE employees
+(
+    employee_id       SERIAL                       NOT NULL,
+    department_id     INT                          NOT NULL,
+    role_id           INT                          NOT NULL,
+    first_name        VARCHAR(100)                 NOT NULL,
+    last_name         VARCHAR(100)                 NOT NULL,
+    email             VARCHAR(255)                 NOT NULL UNIQUE,
+    phone             VARCHAR(30),
+    hire_date         DATE                         NOT NULL,
+    employment_status VARCHAR(20) DEFAULT 'active' NOT NULL,
+    manager_id        INT,
+    PRIMARY KEY (employee_id),
+    CONSTRAINT fk_employees_department FOREIGN KEY (department_id) REFERENCES departments (department_id),
+    CONSTRAINT fk_employees_role FOREIGN KEY (role_id) REFERENCES employee_roles (role_id),
+    CONSTRAINT fk_employees_manager FOREIGN KEY (manager_id) REFERENCES employees (employee_id)
+);
+
+CREATE TABLE devices
+(
+    device_id     SERIAL NOT NULL,
+    imei          VARCHAR(20) UNIQUE,
+    serial_number VARCHAR(100) UNIQUE,
+    manufacturer  VARCHAR(100),
+    model         VARCHAR(100),
+    device_type   VARCHAR(30),
+    purchase_date DATE,
+    PRIMARY KEY (device_id)
+);
+
+CREATE TABLE sim_cards
+(
+    sim_id    SERIAL                          NOT NULL,
+    iccid     VARCHAR(25)                     NOT NULL UNIQUE,
+    imsi      VARCHAR(25)                     NOT NULL UNIQUE,
+    msisdn    VARCHAR(20)                     NOT NULL UNIQUE,
+    sim_type  VARCHAR(20)                     NOT NULL,
+    pin_code  VARCHAR(20),
+    puk_code  VARCHAR(20),
+    status    VARCHAR(20) DEFAULT 'available' NOT NULL,
+    issued_at TIMESTAMP,
+    PRIMARY KEY (sim_id)
+);
+
+CREATE TABLE services
+(
+    service_id       SERIAL                              NOT NULL,
+    service_name     VARCHAR(100)                        NOT NULL UNIQUE,
+    service_category VARCHAR(50)                         NOT NULL,
+    description      TEXT,
+    is_active        BOOLEAN   DEFAULT TRUE              NOT NULL,
+    created_at       TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    PRIMARY KEY (service_id)
+);
+
+CREATE TABLE products
+(
+    product_id   SERIAL                                NOT NULL,
+    service_id   INT                                   NOT NULL,
+    product_name VARCHAR(150)                          NOT NULL,
+    product_code VARCHAR(50)                           NOT NULL UNIQUE,
+    product_type VARCHAR(50)                           NOT NULL,
+    description  TEXT,
+    status       VARCHAR(20) DEFAULT 'active'          NOT NULL,
+    created_at   TIMESTAMP   DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    PRIMARY KEY (product_id),
+    CONSTRAINT fk_products_service FOREIGN KEY (service_id) REFERENCES services (service_id)
+);
+
+CREATE TABLE overage_policies
+(
+    overage_policy_id    SERIAL                          NOT NULL,
+    policy_name          VARCHAR(100)                    NOT NULL UNIQUE,
+    voice_rate_per_min   NUMERIC(10, 4) DEFAULT 0.0000   NOT NULL,
+    sms_rate             NUMERIC(10, 4) DEFAULT 0.0000   NOT NULL,
+    data_rate_per_mb     NUMERIC(10, 4) DEFAULT 0.0000   NOT NULL,
+    throttle_after_limit BOOLEAN        DEFAULT FALSE    NOT NULL,
+    fair_use_limit_mb    NUMERIC(12, 2),
+    status               VARCHAR(20)    DEFAULT 'active' NOT NULL,
+    PRIMARY KEY (overage_policy_id)
+);
+
+CREATE TABLE plans
+(
+    plan_id                SERIAL                          NOT NULL,
+    product_id             INT                             NOT NULL,
+    plan_name              VARCHAR(150)                    NOT NULL,
+    monthly_fee            NUMERIC(12, 2) DEFAULT 0.00     NOT NULL,
+    included_voice_minutes INT            DEFAULT 0        NOT NULL,
+    included_sms           INT            DEFAULT 0        NOT NULL,
+    included_data_mb       NUMERIC(12, 2) DEFAULT 0        NOT NULL,
+    overage_policy_id      INT,
+    contract_term_months   INT            DEFAULT 0        NOT NULL,
+    status                 VARCHAR(20)    DEFAULT 'active' NOT NULL,
+    PRIMARY KEY (plan_id),
+    CONSTRAINT chk_plans_term CHECK (contract_term_months >= 0),
+    CONSTRAINT fk_plans_product FOREIGN KEY (product_id) REFERENCES products (product_id),
+    CONSTRAINT fk_plans_overage_policy FOREIGN KEY (overage_policy_id) REFERENCES overage_policies (overage_policy_id)
+);
+
+CREATE TABLE subscriptions
+(
+    subscription_id     SERIAL                       NOT NULL,
+    account_id          INT                          NOT NULL,
+    plan_id             INT                          NOT NULL,
+    sim_id              INT                          UNIQUE,
+    contract_id         INT,
+    subscription_number VARCHAR(50)                  NOT NULL UNIQUE,
+    activation_date     DATE                         NOT NULL,
+    end_date            DATE,
+    status              VARCHAR(20) DEFAULT 'active' NOT NULL,
+    billing_start_date  DATE                         NOT NULL,
+    PRIMARY KEY (subscription_id),
+    CONSTRAINT chk_subscriptions_dates CHECK (end_date IS NULL OR end_date >= activation_date),
+    CONSTRAINT fk_subscriptions_account FOREIGN KEY (account_id) REFERENCES accounts (account_id),
+    CONSTRAINT fk_subscriptions_plan FOREIGN KEY (plan_id) REFERENCES plans (plan_id),
+    CONSTRAINT fk_subscriptions_sim FOREIGN KEY (sim_id) REFERENCES sim_cards (sim_id),
+    CONSTRAINT fk_subscriptions_contract FOREIGN KEY (contract_id) REFERENCES contracts (contract_id)
+);
+
+CREATE TABLE addons
+(
+    addon_id        SERIAL                          NOT NULL,
+    addon_name      VARCHAR(150)                    NOT NULL,
+    addon_type      VARCHAR(50)                     NOT NULL,
+    price           NUMERIC(12, 2) DEFAULT 0.00     NOT NULL,
+    allowance_value NUMERIC(12, 2),
+    allowance_unit  VARCHAR(20),
+    is_recurring    BOOLEAN        DEFAULT TRUE     NOT NULL,
+    status          VARCHAR(20)    DEFAULT 'active' NOT NULL,
+    PRIMARY KEY (addon_id)
+);
+
+CREATE TABLE subscription_addons
+(
+    subscription_addon_id SERIAL                          NOT NULL,
+    subscription_id       INT                             NOT NULL,
+    addon_id              INT                             NOT NULL,
+    activation_date       DATE                            NOT NULL,
+    deactivation_date     DATE,
+    status                VARCHAR(20)    DEFAULT 'active' NOT NULL,
+    price_at_activation   NUMERIC(12, 2) DEFAULT 0.00     NOT NULL,
+    PRIMARY KEY (subscription_addon_id),
+    CONSTRAINT chk_subscription_addons_dates CHECK (deactivation_date IS NULL OR deactivation_date >= activation_date),
+    CONSTRAINT fk_subscription_addons_subscription FOREIGN KEY (subscription_id) REFERENCES subscriptions (subscription_id),
+    CONSTRAINT fk_subscription_addons_addon FOREIGN KEY (addon_id) REFERENCES addons (addon_id)
+);
+
+CREATE TABLE subscription_status_history
+(
+    status_history_id      SERIAL                              NOT NULL,
+    subscription_id        INT                                 NOT NULL,
+    old_status             VARCHAR(20),
+    new_status             VARCHAR(20)                         NOT NULL,
+    changed_at             TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    changed_by_employee_id INT,
+    reason                 TEXT,
+    PRIMARY KEY (status_history_id),
+    CONSTRAINT fk_sub_status_history_subscription FOREIGN KEY (subscription_id) REFERENCES subscriptions (subscription_id),
+    CONSTRAINT fk_sub_status_history_employee FOREIGN KEY (changed_by_employee_id) REFERENCES employees (employee_id)
+);
+
+CREATE TABLE device_assignments
+(
+    device_assignment_id SERIAL                       NOT NULL,
+    device_id            INT                          NOT NULL,
+    subscription_id      INT                          NOT NULL,
+    assigned_from        TIMESTAMP                    NOT NULL,
+    assigned_to          TIMESTAMP,
+    assignment_status    VARCHAR(20) DEFAULT 'active' NOT NULL,
+    notes                TEXT,
+    PRIMARY KEY (device_assignment_id),
+    CONSTRAINT chk_device_assignments_times CHECK (assigned_to IS NULL OR assigned_to >= assigned_from),
+    CONSTRAINT fk_device_assignments_device FOREIGN KEY (device_id) REFERENCES devices (device_id),
+    CONSTRAINT fk_device_assignments_subscription FOREIGN KEY (subscription_id) REFERENCES subscriptions (subscription_id)
+);
+
+CREATE TABLE network_technologies
+(
+    technology_id   SERIAL                       NOT NULL,
+    technology_name VARCHAR(50)                  NOT NULL UNIQUE,
+    generation      VARCHAR(10)                  NOT NULL,
+    description     TEXT,
+    status          VARCHAR(20) DEFAULT 'active' NOT NULL,
+    PRIMARY KEY (technology_id)
+);
+
+CREATE TABLE network_sites
+(
+    site_id   SERIAL                       NOT NULL,
+    site_code VARCHAR(50)                  NOT NULL UNIQUE,
+    site_name VARCHAR(150)                 NOT NULL,
+    address   VARCHAR(255),
+    region    VARCHAR(100),
+    latitude  NUMERIC(9, 6),
+    longitude NUMERIC(9, 6),
+    site_type VARCHAR(50),
+    status    VARCHAR(20) DEFAULT 'active' NOT NULL,
+    opened_at TIMESTAMP,
+    PRIMARY KEY (site_id)
+);
+
+CREATE TABLE cell_towers
+(
+    tower_id          SERIAL                       NOT NULL,
+    site_id           INT                          NOT NULL,
+    tower_code        VARCHAR(50)                  NOT NULL UNIQUE,
+    height_meters     NUMERIC(6, 2),
+    ownership_type    VARCHAR(50),
+    installation_date DATE,
+    status            VARCHAR(20) DEFAULT 'active' NOT NULL,
+    vendor_name       VARCHAR(100),
+    PRIMARY KEY (tower_id),
+    CONSTRAINT fk_cell_towers_site FOREIGN KEY (site_id) REFERENCES network_sites (site_id)
+);
+
+CREATE TABLE tower_sectors
+(
+    sector_id      SERIAL                       NOT NULL,
+    tower_id       INT                          NOT NULL,
+    sector_label   VARCHAR(20)                  NOT NULL,
+    azimuth        INT,
+    beamwidth      INT,
+    frequency_band VARCHAR(50),
+    technology_id  INT,
+    status         VARCHAR(20) DEFAULT 'active' NOT NULL,
+    PRIMARY KEY (sector_id),
+    CONSTRAINT chk_tower_sectors_azimuth CHECK (azimuth BETWEEN 0 AND 360),
+    CONSTRAINT chk_tower_sectors_beamwidth CHECK (beamwidth BETWEEN 1 AND 360),
+    CONSTRAINT fk_tower_sectors_tower FOREIGN KEY (tower_id) REFERENCES cell_towers (tower_id),
+    CONSTRAINT fk_tower_sectors_technology FOREIGN KEY (technology_id) REFERENCES network_technologies (technology_id)
+);
+
+CREATE TABLE coverage_zones
+(
+    coverage_zone_id     SERIAL      NOT NULL,
+    sector_id            INT         NOT NULL,
+    coverage_type        VARCHAR(30) NOT NULL,
+    zone_description     TEXT,
+    signal_quality_score NUMERIC(5, 2),
+    last_measured_at     TIMESTAMP,
+    PRIMARY KEY (coverage_zone_id),
+    CONSTRAINT fk_coverage_zones_sector FOREIGN KEY (sector_id) REFERENCES tower_sectors (sector_id)
+);
+
+CREATE TABLE roaming_partners
+(
+    roaming_partner_id SERIAL                       NOT NULL,
+    partner_name       VARCHAR(150)                 NOT NULL,
+    country            VARCHAR(100)                 NOT NULL,
+    mcc                VARCHAR(10),
+    mnc                VARCHAR(10),
+    agreement_start    DATE,
+    agreement_end      DATE,
+    status             VARCHAR(20) DEFAULT 'active' NOT NULL,
+    PRIMARY KEY (roaming_partner_id),
+    CONSTRAINT chk_roaming_partners_dates CHECK (agreement_end IS NULL OR agreement_end >= agreement_start)
+);
+
+CREATE TABLE network_alarms
+(
+    alarm_id    SERIAL                     NOT NULL,
+    tower_id    INT,
+    sector_id   INT,
+    alarm_type  VARCHAR(100)               NOT NULL,
+    severity    VARCHAR(20)                NOT NULL,
+    raised_at   TIMESTAMP                  NOT NULL,
+    cleared_at  TIMESTAMP,
+    status      VARCHAR(20) DEFAULT 'open' NOT NULL,
+    description TEXT,
+    PRIMARY KEY (alarm_id),
+    CONSTRAINT chk_network_alarms_times CHECK (cleared_at IS NULL OR cleared_at >= raised_at),
+    CONSTRAINT fk_network_alarms_tower FOREIGN KEY (tower_id) REFERENCES cell_towers (tower_id),
+    CONSTRAINT fk_network_alarms_sector FOREIGN KEY (sector_id) REFERENCES tower_sectors (sector_id)
+);
+
+CREATE TABLE outages
+(
+    outage_id                SERIAL                     NOT NULL,
+    site_id                  INT                        NOT NULL,
+    alarm_id                 INT,
+    outage_type              VARCHAR(50)                NOT NULL,
+    start_time               TIMESTAMP                  NOT NULL,
+    end_time                 TIMESTAMP,
+    affected_customers_count INT         DEFAULT 0      NOT NULL,
+    status                   VARCHAR(20) DEFAULT 'open' NOT NULL,
+    root_cause               TEXT,
+    PRIMARY KEY (outage_id),
+    CONSTRAINT chk_outages_times CHECK (end_time IS NULL OR end_time >= start_time),
+    CONSTRAINT fk_outages_site FOREIGN KEY (site_id) REFERENCES network_sites (site_id),
+    CONSTRAINT fk_outages_alarm FOREIGN KEY (alarm_id) REFERENCES network_alarms (alarm_id)
+);
+
+CREATE TABLE usage_cdr_calls
+(
+    call_cdr_id        SERIAL                        NOT NULL,
+    subscription_id    INT                           NOT NULL,
+    originating_msisdn VARCHAR(20)                   NOT NULL,
+    destination_msisdn VARCHAR(20)                   NOT NULL,
+    sector_id          INT,
+    roaming_partner_id INT,
+    event_start_time   TIMESTAMP                     NOT NULL,
+    event_end_time     TIMESTAMP                     NOT NULL,
+    duration_seconds   INT                           NOT NULL,
+    call_type          VARCHAR(30)                   NOT NULL,
+    direction          VARCHAR(20)                   NOT NULL,
+    charge_amount      NUMERIC(12, 4) DEFAULT 0.0000 NOT NULL,
+    fraud_score        NUMERIC(5, 2)  DEFAULT 0.00,
+    PRIMARY KEY (call_cdr_id),
+    CONSTRAINT chk_cdr_calls_duration CHECK (duration_seconds >= 0),
+    CONSTRAINT chk_cdr_calls_times CHECK (event_end_time >= event_start_time),
+    CONSTRAINT chk_cdr_calls_direction CHECK (direction IN ('outbound', 'inbound')),
+    CONSTRAINT fk_cdr_calls_subscription FOREIGN KEY (subscription_id) REFERENCES subscriptions (subscription_id),
+    CONSTRAINT fk_cdr_calls_sector FOREIGN KEY (sector_id) REFERENCES tower_sectors (sector_id),
+    CONSTRAINT fk_cdr_calls_roaming_partner FOREIGN KEY (roaming_partner_id) REFERENCES roaming_partners (roaming_partner_id)
+);
+
+CREATE TABLE usage_cdr_sms
+(
+    sms_cdr_id         SERIAL                        NOT NULL,
+    subscription_id    INT                           NOT NULL,
+    source_msisdn      VARCHAR(20)                   NOT NULL,
+    destination_msisdn VARCHAR(20)                   NOT NULL,
+    sector_id          INT,
+    roaming_partner_id INT,
+    event_time         TIMESTAMP                     NOT NULL,
+    sms_type           VARCHAR(30)                   NOT NULL,
+    direction          VARCHAR(20)                   NOT NULL,
+    charge_amount      NUMERIC(12, 4) DEFAULT 0.0000 NOT NULL,
+    PRIMARY KEY (sms_cdr_id),
+    CONSTRAINT chk_cdr_sms_direction CHECK (direction IN ('outbound', 'inbound')),
+    CONSTRAINT fk_cdr_sms_subscription FOREIGN KEY (subscription_id) REFERENCES subscriptions (subscription_id),
+    CONSTRAINT fk_cdr_sms_sector FOREIGN KEY (sector_id) REFERENCES tower_sectors (sector_id),
+    CONSTRAINT fk_cdr_sms_roaming_partner FOREIGN KEY (roaming_partner_id) REFERENCES roaming_partners (roaming_partner_id)
+);
+
+CREATE TABLE usage_cdr_data
+(
+    data_cdr_id        SERIAL                        NOT NULL,
+    subscription_id    INT                           NOT NULL,
+    sector_id          INT,
+    roaming_partner_id INT,
+    session_start      TIMESTAMP                     NOT NULL,
+    session_end        TIMESTAMP                     NOT NULL,
+    data_used_mb       NUMERIC(12, 4) DEFAULT 0.0000 NOT NULL,
+    apn                VARCHAR(100),
+    ip_address         INET,
+    charge_amount      NUMERIC(12, 4) DEFAULT 0.0000 NOT NULL,
+    PRIMARY KEY (data_cdr_id),
+    CONSTRAINT chk_cdr_data_times CHECK (session_end >= session_start),
+    CONSTRAINT fk_cdr_data_subscription FOREIGN KEY (subscription_id) REFERENCES subscriptions (subscription_id),
+    CONSTRAINT fk_cdr_data_sector FOREIGN KEY (sector_id) REFERENCES tower_sectors (sector_id),
+    CONSTRAINT fk_cdr_data_roaming_partner FOREIGN KEY (roaming_partner_id) REFERENCES roaming_partners (roaming_partner_id)
+);
+
+CREATE TABLE usage_aggregates_daily
+(
+    usage_daily_id      SERIAL                                   NOT NULL,
+    subscription_id     INT                                      NOT NULL,
+    usage_date          DATE                                     NOT NULL,
+    total_call_seconds  BIGINT         DEFAULT 0                 NOT NULL,
+    total_sms_count     INT            DEFAULT 0                 NOT NULL,
+    total_data_mb       NUMERIC(14, 4) DEFAULT 0.0000            NOT NULL,
+    total_charge_amount NUMERIC(14, 4) DEFAULT 0.0000            NOT NULL,
+    generated_at        TIMESTAMP      DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    PRIMARY KEY (usage_daily_id),
+    CONSTRAINT uq_usage_daily_subscription_date UNIQUE (subscription_id, usage_date),
+    CONSTRAINT fk_usage_daily_subscription FOREIGN KEY (subscription_id) REFERENCES subscriptions (subscription_id)
+);
+
+CREATE TABLE invoices
+(
+    invoice_id           SERIAL                          NOT NULL,
+    account_id           INT                             NOT NULL,
+    invoice_number       VARCHAR(50)                     NOT NULL UNIQUE,
+    billing_period_start DATE                            NOT NULL,
+    billing_period_end   DATE                            NOT NULL,
+    issue_date           DATE                            NOT NULL,
+    due_date             DATE                            NOT NULL,
+    total_amount         NUMERIC(12, 2) DEFAULT 0.00     NOT NULL,
+    tax_amount           NUMERIC(12, 2) DEFAULT 0.00     NOT NULL,
+    discount_amount      NUMERIC(12, 2) DEFAULT 0.00     NOT NULL,
+    status               VARCHAR(20)    DEFAULT 'issued' NOT NULL,
+    PRIMARY KEY (invoice_id),
+    CONSTRAINT chk_invoices_period CHECK (billing_period_end >= billing_period_start),
+    CONSTRAINT chk_invoices_due_date CHECK (due_date >= issue_date),
+    CONSTRAINT fk_invoices_account FOREIGN KEY (account_id) REFERENCES accounts (account_id)
+);
+
+CREATE TABLE invoice_items
+(
+    invoice_item_id SERIAL                      NOT NULL,
+    invoice_id      INT                         NOT NULL,
+    subscription_id INT,
+    item_type       VARCHAR(50)                 NOT NULL,
+    description     TEXT,
+    quantity        NUMERIC(12, 2) DEFAULT 1    NOT NULL,
+    unit_price      NUMERIC(12, 2) DEFAULT 0.00 NOT NULL,
+    line_amount     NUMERIC(12, 2) DEFAULT 0.00 NOT NULL,
+    tax_rate        NUMERIC(5, 2)  DEFAULT 0.00 NOT NULL,
+    PRIMARY KEY (invoice_item_id),
+    CONSTRAINT fk_invoice_items_invoice FOREIGN KEY (invoice_id) REFERENCES invoices (invoice_id),
+    CONSTRAINT fk_invoice_items_subscription FOREIGN KEY (subscription_id) REFERENCES subscriptions (subscription_id)
+);
+
+CREATE TABLE payment_methods
+(
+    payment_method_id SERIAL                       NOT NULL,
+    method_name       VARCHAR(50)                  NOT NULL UNIQUE,
+    provider_name     VARCHAR(100),
+    is_online         BOOLEAN     DEFAULT FALSE    NOT NULL,
+    status            VARCHAR(20) DEFAULT 'active' NOT NULL,
+    PRIMARY KEY (payment_method_id)
+);
+
+CREATE TABLE payments
+(
+    payment_id        SERIAL                          NOT NULL,
+    account_id        INT                             NOT NULL,
+    invoice_id        INT,
+    payment_method_id INT,
+    payment_date      TIMESTAMP                       NOT NULL,
+    amount            NUMERIC(12, 2)                  NOT NULL,
+    reference_number  VARCHAR(100),
+    status            VARCHAR(20) DEFAULT 'completed' NOT NULL,
+    PRIMARY KEY (payment_id),
+    CONSTRAINT chk_payments_amount CHECK (amount >= 0),
+    CONSTRAINT fk_payments_account FOREIGN KEY (account_id) REFERENCES accounts (account_id),
+    CONSTRAINT fk_payments_invoice FOREIGN KEY (invoice_id) REFERENCES invoices (invoice_id),
+    CONSTRAINT fk_payments_method FOREIGN KEY (payment_method_id) REFERENCES payment_methods (payment_method_id)
+);
+
+CREATE TABLE billing_runs
+(
+    billing_run_id           SERIAL                        NOT NULL,
+    billing_cycle_id         INT                           NOT NULL,
+    period_start             DATE                          NOT NULL,
+    period_end               DATE                          NOT NULL,
+    run_started_at           TIMESTAMP                     NOT NULL,
+    run_finished_at          TIMESTAMP,
+    status                   VARCHAR(20) DEFAULT 'running' NOT NULL,
+    generated_invoices_count INT         DEFAULT 0         NOT NULL,
+    PRIMARY KEY (billing_run_id),
+    CONSTRAINT chk_billing_runs_period CHECK (period_end >= period_start),
+    CONSTRAINT chk_billing_runs_times CHECK (run_finished_at IS NULL OR run_finished_at >= run_started_at),
+    CONSTRAINT fk_billing_runs_cycle FOREIGN KEY (billing_cycle_id) REFERENCES billing_cycles (billing_cycle_id)
+);
+
+CREATE TABLE discounts_promotions
+(
+    promotion_id     SERIAL                       NOT NULL,
+    promotion_name   VARCHAR(150)                 NOT NULL,
+    discount_type    VARCHAR(30)                  NOT NULL,
+    discount_value   NUMERIC(12, 2)               NOT NULL,
+    valid_from       DATE                         NOT NULL,
+    valid_to         DATE,
+    eligibility_rule TEXT,
+    status           VARCHAR(20) DEFAULT 'active' NOT NULL,
+    PRIMARY KEY (promotion_id),
+    CONSTRAINT chk_promotions_value CHECK (discount_value >= 0),
+    CONSTRAINT chk_promotions_dates CHECK (valid_to IS NULL OR valid_to >= valid_from)
+);
+
+CREATE TABLE crm_tickets
+(
+    ticket_id            SERIAL                                NOT NULL,
+    customer_id          INT                                   NOT NULL,
+    account_id           INT,
+    subscription_id      INT,
+    assigned_employee_id INT,
+    ticket_type          VARCHAR(50)                           NOT NULL,
+    subject              VARCHAR(255)                          NOT NULL,
+    description          TEXT,
+    priority             VARCHAR(20) DEFAULT 'medium'          NOT NULL,
+    status               VARCHAR(20) DEFAULT 'open'            NOT NULL,
+    created_at           TIMESTAMP   DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    closed_at            TIMESTAMP,
+    parent_ticket_id     INT,
+    PRIMARY KEY (ticket_id),
+    CONSTRAINT chk_crm_tickets_times CHECK (closed_at IS NULL OR closed_at >= created_at),
+    CONSTRAINT fk_crm_tickets_customer FOREIGN KEY (customer_id) REFERENCES customers (customer_id),
+    CONSTRAINT fk_crm_tickets_account FOREIGN KEY (account_id) REFERENCES accounts (account_id),
+    CONSTRAINT fk_crm_tickets_subscription FOREIGN KEY (subscription_id) REFERENCES subscriptions (subscription_id),
+    CONSTRAINT fk_crm_tickets_employee FOREIGN KEY (assigned_employee_id) REFERENCES employees (employee_id),
+    CONSTRAINT fk_crm_tickets_parent FOREIGN KEY (parent_ticket_id) REFERENCES crm_tickets (ticket_id)
+);
+
+CREATE TABLE crm_interactions
+(
+    interaction_id   SERIAL                              NOT NULL,
+    ticket_id        INT                                 NOT NULL,
+    employee_id      INT,
+    interaction_type VARCHAR(50)                         NOT NULL,
+    channel          VARCHAR(30)                         NOT NULL,
+    interaction_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    notes            TEXT,
+    old_status       VARCHAR(20),
+    new_status       VARCHAR(20),
+    PRIMARY KEY (interaction_id),
+    CONSTRAINT fk_crm_interactions_ticket FOREIGN KEY (ticket_id) REFERENCES crm_tickets (ticket_id),
+    CONSTRAINT fk_crm_interactions_employee FOREIGN KEY (employee_id) REFERENCES employees (employee_id)
+);
+
+CREATE TABLE ticket_status_history
+(
+    ticket_status_history_id SERIAL                              NOT NULL,
+    ticket_id                INT                                 NOT NULL,
+    old_status               VARCHAR(20),
+    new_status               VARCHAR(20)                         NOT NULL,
+    changed_at               TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    changed_by_employee_id   INT,
+    comment                  TEXT,
+    PRIMARY KEY (ticket_status_history_id),
+    CONSTRAINT fk_ticket_history_ticket FOREIGN KEY (ticket_id) REFERENCES crm_tickets (ticket_id),
+    CONSTRAINT fk_ticket_history_employee FOREIGN KEY (changed_by_employee_id) REFERENCES employees (employee_id)
+);
+
+CREATE TABLE employee_assignments
+(
+    assignment_id   SERIAL                         NOT NULL,
+    employee_id     INT                            NOT NULL,
+    ticket_id       INT,
+    outage_id       INT,
+    assignment_type VARCHAR(50)                    NOT NULL,
+    start_time      TIMESTAMP                      NOT NULL,
+    end_time        TIMESTAMP,
+    status          VARCHAR(20) DEFAULT 'assigned' NOT NULL,
+    PRIMARY KEY (assignment_id),
+    CONSTRAINT chk_employee_assignments_times CHECK (end_time IS NULL OR end_time >= start_time),
+    CONSTRAINT fk_employee_assignments_employee FOREIGN KEY (employee_id) REFERENCES employees (employee_id),
+    CONSTRAINT fk_employee_assignments_ticket FOREIGN KEY (ticket_id) REFERENCES crm_tickets (ticket_id),
+    CONSTRAINT fk_employee_assignments_outage FOREIGN KEY (outage_id) REFERENCES outages (outage_id)
+);
+
+CREATE TABLE sim_card_subscription_history
+(
+    sim_card_subscription_history_id SERIAL NOT NULL,
+    sim_id                           INT,
+    subscription_id                  INT    NOT NULL,
+    start_date                       TIMESTAMP,
+    end_date                         TIMESTAMP,
+    PRIMARY KEY (sim_card_subscription_history_id),
+    CONSTRAINT chk_sim_history_dates CHECK (end_date IS NULL OR end_date >= start_date),
+    CONSTRAINT fk_sim_history_sim FOREIGN KEY (sim_id) REFERENCES sim_cards (sim_id),
+    CONSTRAINT fk_sim_history_subscription FOREIGN KEY (subscription_id) REFERENCES subscriptions (subscription_id)
+);
