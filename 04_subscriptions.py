@@ -50,13 +50,15 @@ def generate(conn, scale: float, store: DataStore):
     # subscriptions
     # -----------------------------------------------------------------------
     # The subscription is the core revenue-bearing entity: it links an account
-    # to a plan and a SIM card, creating an active phone line.
-    # We cap n_subs at len(sim_ids) to respect the UNIQUE constraint on sim_id.
+    # to a plan, creating an active phone line.
+    # Note: sim_id is no longer on the subscriptions table (moved to
+    # sim_card_subscription_history).  We still assign a SIM per sub in memory
+    # so that sim_card_subscription_history and CDR generation can look up
+    # the MSISDN, but we do NOT insert sim_id into subscriptions.
     n_subs = get_scaled_count("subscriptions", scale)
-    n_subs = min(n_subs, len(sim_ids))  # can't exceed available SIMs
 
     used_sub_nums = set()
-    # Shuffle SIMs and index sequentially to guarantee no duplicates.
+    # Assign SIMs round-robin for in-memory tracking (sim_card_subscription_history + CDRs).
     available_sims = list(sim_ids)
     random.shuffle(available_sims)
 
@@ -66,7 +68,7 @@ def generate(conn, scale: float, store: DataStore):
     for i in range(n_subs):
         aid = random.choice(account_ids)
         pid = random.choice(plan_ids)
-        sid = available_sims[i]  # unique SIM per subscription
+        sid = available_sims[i % len(available_sims)]  # SIM for history/CDR use only
 
         # Optionally link to a contract (70% chance).
         # Not all subscriptions have contracts (e.g. prepaid lines).
@@ -84,7 +86,7 @@ def generate(conn, scale: float, store: DataStore):
         billing_start = act_date.replace(day=1) + timedelta(days=31)
         billing_start = billing_start.replace(day=1)  # 1st of next month
 
-        sub_rows.append((aid, pid, sid, cid, sub_num, act_date, end_dt, status, billing_start))
+        sub_rows.append((aid, pid, cid, sub_num, act_date, end_dt, status, billing_start))
         sub_meta.append({
             "account_id": aid, "plan_id": pid, "sim_id": sid,
             "activation_date": act_date, "end_date": end_dt, "status": status,
@@ -92,7 +94,7 @@ def generate(conn, scale: float, store: DataStore):
 
     sub_ids = insert_batch_returning(
         cur, "subscriptions",
-        ["account_id", "plan_id", "sim_id", "contract_id", "subscription_number",
+        ["account_id", "plan_id", "contract_id", "subscription_number",
          "activation_date", "end_date", "status", "billing_start_date"],
         sub_rows, "subscription_id",
     )

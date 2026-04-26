@@ -105,7 +105,7 @@ FK_CHECKS = [
     ("plans", "overage_policy_id", "overage_policies", "overage_policy_id"),
     ("subscriptions", "account_id", "accounts", "account_id"),
     ("subscriptions", "plan_id", "plans", "plan_id"),
-    ("subscriptions", "sim_id", "sim_cards", "sim_id"),
+    ("subscriptions", "contract_id", "contracts", "contract_id"),
     ("subscription_addons", "subscription_id", "subscriptions", "subscription_id"),
     ("subscription_addons", "addon_id", "addons", "addon_id"),
     ("subscription_status_history", "subscription_id", "subscriptions", "subscription_id"),
